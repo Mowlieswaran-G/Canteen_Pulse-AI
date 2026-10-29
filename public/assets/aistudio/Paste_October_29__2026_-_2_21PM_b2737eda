@@ -1,0 +1,322 @@
+# ROLE
+You are a senior full-stack + AI engineer. Build "FeedbackIQ": a multi-tenant SaaS that
+turns food-service feedback (college mess, restaurant chain, corporate cafeteria,
+hospital) into prioritized, tracked action using a LangGraph multi-agent system.
+Build in the 9 phases below. After each phase: run the tests, fix failures, then report
+(a) what you built, (b) how to run it, (c) test results, (d) known limitations,
+(e) what the next phase needs. STOP after each phase and wait for me to say "continue".
+Do not build later-phase features early. Ask questions only if truly blocked; otherwise
+choose sensible defaults and state them.
+
+# NON-NEGOTIABLE PRINCIPLES
+1. "Code counts, LLM thinks." NO ML training. pandas tools compute facts (counts, trends,
+   repeat frequency, day patterns); LLM agents interpret them. The LLM never invents
+   numbers; every prediction cites tool output, and citations are programmatically verified.
+2. Multi-tenancy: every table has org_id. ALL data access goes through repository.py
+   (OrgRepository), which requires org_id and filters every query and every get-by-id.
+3. Dynamic RBAC: roles/permissions are DB rows. Code calls can(user, permission, location_id),
+   never checks role names.
+4. One codebase for all orgs. Behavior comes from org_config (JSON from a template,
+   editable after signup). No org-specific code.
+5. MOCK_LLM=true must make the whole app work offline with deterministic outputs
+   (also the automatic fallback if the LLM provider fails, with a visible notice).
+6. Privacy: scrub PII (emails, phones, names, room/roll IDs) BEFORE any text reaches an LLM.
+7. Explainability: every prediction and action stores the evidence it used.
+
+# TECH STACK
+Python 3.11, FastAPI, SQLAlchemy 2 (SQLite now, Postgres-compatible), Pydantic v2,
+LangGraph (SqliteSaver checkpointer) + LangChain components, pandas, scipy (z-test),
+rapidfuzz, scikit-learn (TF-IDF/KMeans; sentence-transformers optional), Streamlit +
+plotly, APScheduler, slowapi, passlib/bcrypt + JWT, reportlab or weasyprint, pytest.
+LLM is provider-agnostic via env vars (LLM_PROVIDER, LLM_MODEL_CHEAP, LLM_MODEL_STRONG,
+LLM_API_KEY, MOCK_LLM, JWT_SECRET, FORECAST_WINDOW_WEEKS=6, VERIFY_AFTER_DAYS=7).
+Cheap model for per-comment Analysis; strong model for Insight naming, Prediction, Action,
+Verification summary, Report. Temperature 0, structured/JSON-schema output, Pydantic
+validation, up to 2 retries, response cache keyed by sha256(model+prompt+payload),
+llm_usage table (org_id, agent, model, tokens, est_cost, latency).
+
+# PROJECT STRUCTURE
+feedbackiq/
+  app/ {config,db,models,schemas,auth,rbac,repository,llm,main,scheduler}.py
+  app/templates/ {college_mess,restaurant_chain,corporate_cafeteria,hospital}.json
+  app/services/ (orgs, escalation)   app/routers/
+  app/agents/ {base,ingestion,analysis,insight,prediction,priority,action,verification,report_alert}.py
+  app/tools/ {stats,recurrence,priority_formula,backtest,notify}.py
+  app/graph/ {state,nodes,workflow,runner}.py
+  data/ {generate_synthetic.py, load_zomato.py}
+  scripts/ {run_pipeline,eval_analysis,eval_prediction,compare_modes}.py
+  ui/ {Home.py, api_client.py, session.py, components.py, pages/}
+  tests/  docs/  seed.py  Makefile  Dockerfile  docker-compose.yml  README.md
+  .env.example  requirements.txt
+
+# DATA MODEL (all tables except users and permissions carry org_id, indexed)
+organizations(id,name,type,settings_json,plan,created_at); locations(id,org_id,name);
+users(id,name,email unique,password_hash); memberships(user_id,org_id,location_id nullable,role_id);
+roles(id,org_id,name,is_default); permissions(id,key unique); role_permissions(role_id,permission_id);
+feedback(id,org_id,location_id,timestamp,rating 1-5,text,text_clean,channel,meal_type,item,
+  anonymous,language,content_hash,raw_json);
+analysis_results(feedback_id unique,sentiment,sentiment_score,aspects_json,issue_category,
+  severity 1-5,entities_json,is_alert); topics(week,name,summary,comment_count,trend,example_ids_json);
+predictions(week,issue_key,item,meal_type,risk_level,evidence_json,rationale,likely_day);
+actions(issue_key,recommendation,owner_role,effort,priority_score,score_breakdown_json,
+  status[proposed|approved|rejected|in_progress|done|verified],approved_by,due_date,
+  completed_at,completion_note,fixed_on,published bool);
+verification_results(action_id,before_count,after_count,change_pct,verdict,confidence,caveats,summary);
+alerts(feedback_id,reason,status[open|acknowledged|resolved]); reports(week,content_md);
+escalations; llm_usage; audit_log(user_id,event,payload_json,created_at).
+Indexes on (org_id,timestamp), (org_id,item,meal_type), (org_id,content_hash).
+
+# RBAC
+Permission keys: feedback.submit, dashboard.view, forecast.view, action.approve, task.view,
+task.complete, report.view, report.export, users.manage, roles.manage, settings.edit,
+alerts.receive, audit.view. can() is true if any membership in the ACTIVE org has a role with
+the permission and the membership is org-wide or matches location_id. Users may belong to
+several orgs with different roles (POST /auth/switch-org reissues the token). Admin UI is a
+permission matrix (roles x permissions) to create/edit/delete roles (block deleting a role
+with members or the last roles.manage holder), invite members (token, no email needed),
+accept invites. Audit-log every role/member/settings change with before/after.
+
+# ORG TEMPLATES (JSON validated by a TemplateConfig Pydantic model; copied into org settings)
+Fields: org_type, display_name, categories, entities, meal_types, weights,
+health_risk_categories (always pinned top), alert_keywords {en,hi (romanized+Devanagari),ta},
+roles [{name,permissions}], approver_role, executor_role, feedback_giver_role, languages,
+escalation_days. Content:
+- college_mess: Student, Warden, Mess Manager, Cook, Admin; categories taste, temperature,
+  hygiene, quantity, wait_time, freshness; weights hygiene 5, taste 2.
+- restaurant_chain: Customer, Outlet Manager, Regional Manager, Brand Admin; taste, delivery,
+  packaging, service, price, hygiene.
+- corporate_cafeteria: Employee, Facility Manager, Vendor, HR Admin; variety, hygiene, price, speed, taste.
+- hospital: Patient, Dietitian, Kitchen Head, Admin; diet_compliance, temperature, hygiene,
+  taste; hygiene weight 5.
+Alert keywords: food poisoning, insect, cockroach, lizard, hair in food, vomit, allergy,
+stomach pain, worm (plus Hindi/Tamil equivalents).
+
+# SYNTHETIC DATA (data/generate_synthetic.py --template X --weeks 16 --seed 42 --out data/out/)
+Outputs feedback.csv (feedback_id,date,meal_type,item,rating,comment,channel,issue_category,
+location) and ground_truth.json; deterministic per seed; prints a pattern summary table.
+18-25 items on a weekly rotation; 25-80 comments/day (higher weekends/Mondays); channels
+qr_form, complaint_box, csv_import, google_review; 12-15% neutral/positive, terse ("ok"),
+typos, ALL CAPS, mixed-aspect comments ("taste super but cold and queue endless"); ~20%
+code-mixed Hinglish ("khana bilkul thanda tha") and Tanglish ("sambar romba thanni");
+rating correlates with issues. 5-10% background noise. Injected patterns (PATTERNS list):
+ P1 fish curry, Friday lunch, temperature, 55-70% complaint rate weekly (expect High)
+ P2 dosa, Monday breakfast, temperature/soggy, ~50% (High)
+ P3 rice on high-footfall days (above 80th percentile volume), quantity/taste rises
+ P4 week 5 only, wait_time at dinner: one-off spike (must NOT be High)
+ P5 week 12: 3 hygiene comments (hair/insect): must alert and pin to top
+ P6 FIXED: paneer curry, Wednesday lunch, taste (too salty) ~50% weeks 1-9, ~8% from week 10
+ P7 emerging: chicken biryani freshness 0% rising to 40% by final week (rising)
+Also generate analogous restaurant_chain patterns (weekend delivery cold, packaging leak,
+price complaints after a date, one hygiene incident, one fixed pattern).
+data/load_zomato.py loads the Zomato Bangalore reviews if present and prints
+"PROXY DATA, NOT CANTEEN DATA. For Analysis-agent testing only."
+
+# AGENTS
+1. INGESTION: normalize to schema; PII scrub to [EMAIL]/[PHONE]/[NAME]/[ID] into text_clean
+   (keep original only if org retain_original=true); detect language (langdetect + script
+   check + Hinglish/Tanglish word-list heuristic); normalize code-mixed text to English with
+   the cheap model (mock = dictionary translator: thanda, garam, namak, kam, romba, illa,
+   bekar, nalla...); dedupe by content_hash and rapidfuzz ratio>92 within item/day;
+   return stats (received, cleaned, deduped, pii_scrubbed, by_language).
+2. ANALYSIS (cheap model, batches of 20-30): per comment {feedback_id, sentiment, score -1..1,
+   aspects[{aspect,sentiment}], issue_category (org categories or "other"/"none"), severity 1-5
+   (1 minor, 3 clear failure, 5 health risk), entities{item,meal_type,location}, is_alert,
+   alert_reason}. Prompt is templated from org_config; mixed comments pick the dominant
+   category but list all aspects; prefer provided metadata over guessing entities. Validate,
+   map unknown category to "other", re-request missing ids once. DETERMINISTIC ALERT BACKSTOP:
+   final is_alert = LLM OR org keyword match (any language); create alerts rows. Mock = lexicon
+   classifier per category (cold/thanda/thanni -> temperature, salty/oily/bland -> taste, ...).
+3. INSIGHT: topic discovery over negative comments (current + prior 4 weeks) via embeddings or
+   TF-IDF+KMeans (k 3-10 by silhouette); strong model names clusters (<=5 words + one-line
+   summary) from representative comments only; counts and week-over-week trend computed by
+   code; aspect breakdown table; persist topics.
+4. PREDICTION: for each IssueKey(category,item,meal_type) build an evidence packet via
+   build_issue_facts(); batch ~10 per strong-model call. LLM outputs risk High/Medium/Low,
+   likely_day (only if dominant_share>=0.4), evidence items quoting exact field/value pairs,
+   and a <=2-sentence rationale. NEVER percentages. Spikes cannot exceed Low without other
+   evidence. Programmatically verify every cited value equals the packet; on mismatch retry
+   once then fall back to the rule's reason; store evidence_verified. BACKSTOP:
+   final_risk = max(llm_risk, rule_risk); never let the LLM lower a rule-High; note the floor.
+   Produce plain-language forecast lines whose numbers match the data. Mock = rule + template.
+5. PRIORITY (pure Python, no LLM): see formula below; attach open alerts as pinned items.
+6. ACTION (strong model) for top N: concrete recommendation (specific to item/meal/day, no
+   generic advice; hygiene gets containment + root-cause check), owner_role chosen from roles
+   holding task.complete, effort 1-5, due date <=7 days (next occurrence of likely_day),
+   measurable success_metric, evidence_refs. Validate owner/date/refs; re-run priority with the
+   real effort; save as "proposed"; add a manager-facing "why". Mock = recommendation library.
+7. VERIFICATION: see Phase 8.
+8. REPORT & ALERT: see Phase 8.
+
+# STATS TOOLS (pure pandas functions on DataFrames, every one takes as_of and filters
+# timestamp < as_of so backtests cannot leak future data)
+weekly_counts, weekly_rates (complaints/feedback), weeks_present(last_n=6), trend (slope
+normalized by mean; needs >=4 points), day_of_week_pattern (+dominant_day/share),
+days_since_last, avg_gap_days, complaint_rate, footfall_correlation, is_spike (one-week
+exceedance of mean+2sd with other weeks near zero), before_after (rate-based, normalized by
+volume, min sample sizes, enough_data flag), build_issue_facts (the evidence packet),
+discover_issue_keys. rule_risk(facts): High if present >=4 of last 6 weeks OR (>=3 of 6 and
+rising); Medium if 3 of 6 OR (2 of 6 and rising); else Low; spikes forced Low.
+PRIORITY FORMULA: score = severity x org_weight x frequency(4-week count) x recurrence_weight
+(High 3, Medium 2, Low 1) x reach / effort. PIN RULE: health_risk categories with severity>=4
+or any open alert rank above all unpinned issues. Return score_breakdown + deterministic
+explanation_text ("Ranked #1 because it is a hygiene risk").
+BACKTEST: for each held-out week W use only data before W, predict, compare to whether the
+issue actually recurred in W; report High precision, recall, confusion table, and a baseline
+("recurs if it occurred last week"). The predictor is pluggable so the LLM agent can be
+backtested too (add a --max-calls budget).
+
+# LANGGRAPH WORKFLOW
+State (TypedDict, small: IDs and summaries only; heavy data stays in DB): org_id, run_id, week,
+as_of, org_config, ingestion_stats, alerts, topics, predictions, ranked, actions, approvals,
+scheduled_tasks, verification_results, report, errors, node_timings, mode (full|verify_only).
+Flow: ingestion -> analysis -> (conditional: new alerts -> alert node) -> insight -> prediction
+-> priority -> action -> approval (HUMAN-IN-THE-LOOP via interrupt(); resume with
+Command(resume={approvals, approved_by}) after an action.approve RBAC check) -> schedule
+(tasks only for approved actions, assigned to owner_role) -> verification -> report -> END.
+verify_only mode jumps straight to verification -> report. Checkpointer SqliteSaver with
+thread_id = f"{org_id}:{week}"; must resume after a process restart. Retry transient LLM errors
+(max 2, backoff); Insight failure must not block Prediction; Analysis failure halts with a clear
+error. @agent_node decorator logs start/end/duration and captures errors. Alert node never blocks
+(email/Slack stubs log payloads unless webhook env is set; recipients hold alerts.receive).
+Runner: start_run, get_run_status, resume_with_approvals, progress events for the UI.
+CLI: python scripts/run_pipeline.py --org "ABC College" --auto-approve-top 3. Save the graph
+diagram to docs/architecture.mmd. Re-running the same org/week must be idempotent.
+
+# API (all authenticated and org-scoped unless public; permission in brackets)
+/auth/signup|login|switch-org, GET /me (user, org, roles, flattened permissions),
+/orgs, /orgs/me, PUT /orgs/settings [settings.edit], /locations, /roles, /members/invite|accept,
+POST /feedback [feedback.submit], POST /feedback/upload (CSV, returns inserted/skipped/duplicates),
+POST /pipeline/run, GET /pipeline/status|progress/{run_id}, GET /analysis/summary, /topics, /aspects
+[dashboard.view], /forecast, /backtest [forecast.view], GET /actions, /actions/{id} (breakdown +
+evidence), POST /actions/{id}/approve|reject [action.approve] (resumes graph),
+POST /actions/{id}/complete [task.complete] (note + optional photo), GET /tasks [task.view],
+GET /alerts, POST /alerts/{id}/ack [alerts.receive], GET /impact, /reports/latest, /reports/{week},
+/audit [audit.view], /admin/jobs, org data export and delete-my-data (admin).
+PUBLIC (no auth, rate-limited, honeypot): GET /public/{org_slug}/you-said-we-did (published,
+anonymized, resolved only) and POST /public/{org_slug}/feedback (anonymous submissions never
+store user_id). slowapi on public and auth routes. Tenant isolation must hold for every endpoint.
+
+# UI (Streamlit; talks to the API only; nav shows only pages the user can() access;
+# each page opens with a one-line plain-language summary; a non-technical manager must
+# understand it in 30 seconds; mobile-friendly form and tasks; empty states; no raw stack traces)
+Home/Login + "Create organization" wizard (name -> template cards showing roles and categories ->
+locations); 1 Feedback Form (emoji rating, quick tags, optional item/meal, any-language comment,
+anonymous default ON, QR deep link ?org=&item=&meal=); 2 Dashboard (satisfaction, volume, open
+alerts, week-over-week arrows, sentiment trend, complaints by category, topics with trend arrows
+and examples, aspect breakdown, filters, CSV upload); 3 Action Board (red alerts banner, ranked
+cards with risk badge, recommendation, owner, effort, due date, expandable "Why is this #N?" with
+score breakdown and evidence, Approve/Reject, "Approve top 3"); 4 Forecast (risk table High->Low
+with evidence, sparklines, likely day, backtest accuracy vs baseline, caption "Risk levels come from
+counted history, not guesses"); 5 Tasks (today's tasks for the user's role, big buttons, mark done
+with note/photo, overdue in red, no charts); 6 Impact; 7 You Said, We Did (public); 8 Admin Roles
+(permission matrix, create/delete role, invite, members, audit snippet); 9 Admin Settings (edit
+categories/weights/keywords/escalation/approver/executor roles, "Run pipeline now" with live
+node progress, run history, LLM usage and cost per 1k comments, job list); Audit page.
+First-run onboarding checklist: create org -> invite members -> upload feedback -> run pipeline ->
+approve first action.
+
+# VERIFICATION, IMPACT, YOU SAID WE DID, REPORTS (Phase 8 detail)
+Verification runs when status=done and completed_at + VERIFY_AFTER_DAYS has passed. Use
+before_after (14-day windows, rate-normalized). Verdict: insufficient_data if not enough data;
+improved if relative drop >=30% AND absolute drop >= minimum; worse if rise >=20%; else no_change.
+Add a two-proportion z-test confidence (high p<0.05, medium p<0.15, else low) and a confound
+caveat if other items' overall complaint rate moved similarly. Strong model writes a 2-sentence
+summary from the structured result only; code validates every number appears in the result. On
+no_change/worse create a follow-up proposed action including the prior attempt. After a verified
+fix, set fixed_on so build_issue_facts uses post-fix data and the key stops showing High forever.
+P6 must verify as improved with a large drop; untouched P1 produces no verification.
+Impact page: per-fix before/after chart (weekly rate with vertical marker at fix date, shaded
+bands), verdict badge, numbers, sample sizes, confidence, caveats, owner and note; summary cards
+(issues fixed, avg reduction, success rate, time to fix); admin CSV export.
+You Said, We Did: public, student-voice entries ("You said: dosa on Monday mornings was cold. We did:
+smaller batches and a warm tray. Result: cold-food complaints down 62%."), generated from anonymized
+topic summaries (never raw comments), shown only if the manager ticks publish (default off); shareable
+URL/QR and embed snippet; org name and accent color.
+Weekly report: markdown with top issues/topics, satisfaction delta, forecast highlights, actions
+proposed/approved/done, verification results, open alerts, overdue/escalations, "what to watch next
+week". Code inserts all figures (validator checks numbers); LLM rewrites narrative only; export PDF and
+.md; email via SMTP if configured, else log a stub.
+Notifications: SMTP and generic webhook senders behind env flags (default stubs); alert text has severity,
+item, meal, scrubbed excerpt, and a link to the Action Board. Escalations: proposed actions unapproved
+past escalation_days, tasks past due, alerts unacknowledged past N hours -> escalation record, notify users
+with users.manage or audit.view, banner on admin page, audit logged.
+Scheduler (APScheduler): per-org weekly pipeline, daily verification, hourly escalation check, weekly
+report; each org in its own try/except; idempotent; --run-now job_name CLI; /admin/jobs lists last/next run.
+
+# BUILD PHASES (stop and report after each)
+PHASE 1 Foundation: scaffold, config, DB models, 4 templates + TemplateConfig loader, synthetic generator
+  with injected patterns and ground_truth.json (college + restaurant), Zomato loader. Tests: templates
+  validate, org_id on all non-global tables, generator deterministic, each pattern's measured rate is in
+  its band, P6 drops after week 10, P5 yields exactly the configured hygiene comments, 15-25% code-mixed.
+PHASE 2 Identity and tenancy: auth (bcrypt, JWT with user_id+org_id, switch-org), create_org from template
+  (copy config, seed roles/permissions, locations, owner admin membership), dynamic RBAC with can() and
+  role/member endpoints, OrgRepository, feedback intake (single + CSV with dedupe), partial seed.py creating
+  "ABC College" (college_mess) and "Spice Chain Restaurants" (restaurant_chain) with one user per role and
+  loaded data. Tests: password/JWT (forged/expired rejected), different roles/categories from the same code
+  path, can() after a matrix edit with no code change, cannot delete a role with members or the last
+  roles.manage holder, TENANT ISOLATION across every repository method (parametrized), anonymous feedback
+  stores no user, audit entries.
+PHASE 3 Fact engine: stats tools, rule_risk, priority formula with hygiene pin, backtest, repo.complaints_df
+  (use the generator's issue_category as a stand-in until Phase 4). Tests: hand-computed expectations incl.
+  empty/single-row/zero weeks; NO-LEAKAGE test (facts at as_of=D identical with or without later rows);
+  rule_risk classifies ground truth (P1,P2 High; P7 rising; P4 Low; P6 High before fix, not after); priority
+  arithmetic and org weights; hygiene pin beats higher scores; backtest High precision >0.7 on injected
+  recurring patterns with baseline comparison printed (python -m app.tools.backtest --org demo).
+PHASE 4 Language agents: LLM layer (cache, usage, mock mode), Ingestion, Analysis, Insight, @agent_node,
+  real analysis_results feed complaints_df. scripts/eval_analysis.py prints category accuracy and macro F1,
+  sentiment accuracy, alert recall/precision (all P5 must alert), accuracy by language, and a PII-leak check.
+  Tests: PII scrubber edge cases, dedupe, language detection (English, Devanagari, Hinglish, Tanglish),
+  malformed LLM output -> retry then clean failure, missing ids re-requested, keyword alert fires even if the
+  mock LLM says no, mixed comment gives 3 aspects with right polarity. Mock thresholds: category accuracy
+  >=0.80, alert recall 1.0.
+PHASE 5 Reasoning agents: Prediction with citation verification and rule backstop, Priority integration,
+  Action agent, run_prediction_cycle service. scripts/eval_prediction.py prints pattern | expected | rule |
+  agent | correct | evidence_verified plus Rule vs Agent vs Baseline backtest. Tests: fabricated citation caught,
+  LLM Low on a rule-High packet -> final High with note, spike never above Low, percentages rejected, owner_role
+  outside task.complete holders corrected, hygiene always rank 1, org weights change ordering, the same
+  service runs on both demo orgs. Done when ABC College's top 5 include fish curry/Friday/cold and dosa/Monday
+  with High risk and verified evidence.
+PHASE 6 Orchestration: LangGraph workflow, nodes, interrupt/resume, checkpointer, retries, runner, CLI,
+  architecture.mmd. Tests: routers, run reaches approval interrupt, resume creates tasks only for approved
+  actions and only for owner_role, survives restart with the same thread_id, user without action.approve cannot
+  resume, forced Insight failure continues and forced Analysis failure halts, two orgs concurrently with no
+  leakage, idempotent re-runs. Demo the alert route on the hygiene incident week.
+PHASE 7 API + UI: all endpoints, api_client/session, all Streamlit pages above, scripts/dev.sh, seed.py
+  prints demo users per role and pre-runs the pipeline to the approval pause. Tests: 401/403/200 per role
+  (Cook cannot approve, Student cannot view dashboard), public endpoints leak no PII and only published
+  items, rate limits, approving via API resumes the graph, isolation re-run on every endpoint, /me reflects
+  matrix edits immediately, AppTest smoke tests.
+PHASE 8 Close the loop: Verification agent, Impact page, You Said We Did, report agent + PDF, notifications,
+  escalations, scheduler, seed demo story for ABC College (weeks 1-16 loaded; pipeline as of week 9; paneer
+  action approved/done end of week 9; verification at week 12+ shows improved; hygiene alerts resolved;
+  fish curry still open and High; --reset flag). Tests: all four verdicts, hallucinated-number validator,
+  P6 improved with change_pct below -50%, P1 stays High and unverified, fixed_on logic, follow-up on no_change,
+  public board only shows published anonymized entries, report numbers equal DB aggregates, jobs idempotent,
+  escalation thresholds, isolation.
+PHASE 9 Polish: tests/test_acceptance.py printing a PASS/FAIL table for the acceptance criteria below;
+  ruff/black/mypy; security review (JWT expiry, upload limits, no PII or keys in logs with a test that greps
+  pipeline logs); data protection (retain_original off option, export/delete endpoints, retention setting);
+  performance (10k rows in mock mode, report timings); cost per 1k comments; failure UX (missing key ->
+  banner + mock fallback); scripts/compare_modes.py (mock vs real on 200 comments); README (pitch, mermaid
+  system/graph/ER diagrams, 3-command quickstart, env table, mock vs real switch, how to create a "Hostel
+  Warden" role, how to add a template via JSON only, how prediction works without ML including the backtest
+  and honest limits, privacy, limitations, roadmap: Postgres RLS, Next.js, WhatsApp/SMS, SSO, billing);
+  docs/DEMO_SCRIPT.md (timed 3-minute and 60-second versions with exact logins and clicks),
+  docs/JUDGE_QA.md (why no ML, hallucination control, backtest accuracy, tenant isolation, generalization,
+  privacy, business model, proxy vs real data), docs/PITCH_OUTLINE.md, docs/POSTGRES_RLS.md; Dockerfile,
+  docker-compose, Makefile (setup, seed, test, run, demo, reset), pinned requirements, complete .env.example,
+  GitHub Actions (lint + tests in mock mode); fresh-clone simulation of `make setup seed demo`.
+
+# ACCEPTANCE CRITERIA (the demo must work end to end, offline with MOCK_LLM=true)
+1. seed.py creates two orgs from different templates with different roles and categories, no code differences.
+2. The pipeline puts fish curry/Friday/cold and dosa/Monday in the top 5 actions as High risk with verified
+   evidence.
+3. The hygiene comments trigger alerts immediately and are pinned #1.
+4. A manager approves an action, the graph resumes, and a task appears for the Cook role only.
+5. Completing the task and running verification shows a measured before/after drop (paneer P6: Improved).
+6. The Forecast page shows backtest precision on a held-out period vs the baseline.
+7. Spike P4 is not High; emerging P7 is flagged rising.
+8. Org A can never read org B's data, and the Student role sees only the feedback form and public board.
+
+# START
+Begin with Phase 1. First print your plan, assumptions, and file list; then implement, test, report, and stop.

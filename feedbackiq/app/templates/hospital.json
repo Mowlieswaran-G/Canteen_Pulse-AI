@@ -1,0 +1,111 @@
+{
+  "org_type": "hospital",
+  "display_name": "Hospital Dietary & Patient Catering",
+  "categories": [
+    "hygiene",
+    "diet_compliance",
+    "temperature",
+    "taste"
+  ],
+  "entities": {
+    "item": true,
+    "meal_type": true,
+    "location": true
+  },
+  "meal_types": [
+    "breakfast",
+    "lunch",
+    "evening_broth",
+    "dinner"
+  ],
+  "weights": {
+    "hygiene": 5.0,
+    "diet_compliance": 4.5,
+    "temperature": 3.5,
+    "taste": 2.0
+  },
+  "health_risk_categories": [
+    "hygiene",
+    "diet_compliance"
+  ],
+  "alert_keywords": {
+    "en": [
+      "allergy",
+      "choking",
+      "peanut",
+      "gluten",
+      "food poisoning",
+      "insect",
+      "spoiled milk",
+      "cold broth"
+    ],
+    "hi": [
+      "allergy",
+      "keeda",
+      "pet dard",
+      "khatta dudh"
+    ],
+    "ta": [
+      "allergy",
+      "poochi",
+      "vayiroli",
+      "pasi"
+    ]
+  },
+  "roles": [
+    {
+      "name": "Admin",
+      "permissions": [
+        "feedback.submit",
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "task.complete",
+        "report.view",
+        "report.export",
+        "users.manage",
+        "roles.manage",
+        "settings.edit",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Chief Dietitian",
+      "permissions": [
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "report.view",
+        "report.export",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Kitchen Head",
+      "permissions": [
+        "task.view",
+        "task.complete",
+        "alerts.receive"
+      ]
+    },
+    {
+      "name": "Patient",
+      "permissions": [
+        "feedback.submit"
+      ]
+    }
+  ],
+  "approver_role": "Chief Dietitian",
+  "executor_role": "Kitchen Head",
+  "feedback_giver_role": "Patient",
+  "languages": [
+    "en",
+    "hi",
+    "ta"
+  ],
+  "escalation_days": 1
+}

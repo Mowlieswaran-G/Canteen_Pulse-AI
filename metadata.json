@@ -1,0 +1,6 @@
+{
+  "name": "CanteenPulse AI - Canteen Ops & Feedback Intelligence",
+  "description": "Role-based canteen operations, feedback analytics, AI forecast, and action management with dynamic permissions and high-fidelity dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

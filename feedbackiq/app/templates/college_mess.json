@@ -1,0 +1,140 @@
+{
+  "org_type": "college_mess",
+  "display_name": "College / University Dining Mess",
+  "categories": [
+    "hygiene",
+    "temperature",
+    "taste",
+    "quantity",
+    "wait_time",
+    "freshness"
+  ],
+  "entities": {
+    "item": true,
+    "meal_type": true,
+    "location": true
+  },
+  "meal_types": [
+    "breakfast",
+    "lunch",
+    "snacks",
+    "dinner"
+  ],
+  "weights": {
+    "hygiene": 5.0,
+    "temperature": 3.0,
+    "taste": 2.0,
+    "quantity": 2.5,
+    "wait_time": 2.0,
+    "freshness": 4.0
+  },
+  "health_risk_categories": [
+    "hygiene"
+  ],
+  "alert_keywords": {
+    "en": [
+      "food poisoning",
+      "insect",
+      "cockroach",
+      "lizard",
+      "hair in food",
+      "vomit",
+      "allergy",
+      "stomach pain",
+      "worm",
+      "glass shard",
+      "raw chicken"
+    ],
+    "hi": [
+      "pet dard",
+      "ulti",
+      "keeda",
+      "tilchatta",
+      "baal",
+      "chhipkali",
+      "kaccha",
+      "पेट दर्द",
+      "उल्टी",
+      "कीड़ा",
+      "तिलचट्टा",
+      "बाल",
+      "छिपकली"
+    ],
+    "ta": [
+      "vayiroli",
+      "poochi",
+      "azhugiya",
+      "vaanthi",
+      "mudi",
+      "palli",
+      "வயிற்று வலி",
+      "வாந்தி",
+      "பூச்சி",
+      "முடி"
+    ]
+  },
+  "roles": [
+    {
+      "name": "Admin",
+      "permissions": [
+        "feedback.submit",
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "task.complete",
+        "report.view",
+        "report.export",
+        "users.manage",
+        "roles.manage",
+        "settings.edit",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Mess Manager",
+      "permissions": [
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "report.view",
+        "report.export",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Warden",
+      "permissions": [
+        "dashboard.view",
+        "forecast.view",
+        "report.view",
+        "alerts.receive"
+      ]
+    },
+    {
+      "name": "Cook",
+      "permissions": [
+        "task.view",
+        "task.complete"
+      ]
+    },
+    {
+      "name": "Student",
+      "permissions": [
+        "feedback.submit"
+      ]
+    }
+  ],
+  "approver_role": "Mess Manager",
+  "executor_role": "Cook",
+  "feedback_giver_role": "Student",
+  "languages": [
+    "en",
+    "hi",
+    "ta"
+  ],
+  "escalation_days": 2
+}

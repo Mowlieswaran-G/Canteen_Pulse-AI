@@ -1,0 +1,115 @@
+{
+  "org_type": "restaurant_chain",
+  "display_name": "Multi-Outlet Restaurant Chain",
+  "categories": [
+    "hygiene",
+    "taste",
+    "delivery",
+    "packaging",
+    "service",
+    "price"
+  ],
+  "entities": {
+    "item": true,
+    "meal_type": true,
+    "location": true
+  },
+  "meal_types": [
+    "lunch",
+    "dinner",
+    "late_night"
+  ],
+  "weights": {
+    "hygiene": 5.0,
+    "taste": 3.0,
+    "delivery": 3.0,
+    "packaging": 2.5,
+    "service": 2.0,
+    "price": 2.0
+  },
+  "health_risk_categories": [
+    "hygiene"
+  ],
+  "alert_keywords": {
+    "en": [
+      "food poisoning",
+      "insect",
+      "cockroach",
+      "vomit",
+      "stomach pain",
+      "glass piece",
+      "foreign object",
+      "spoiled meat"
+    ],
+    "hi": [
+      "pet dard",
+      "keeda",
+      "kaccha",
+      "sada hua",
+      "ulti"
+    ],
+    "ta": [
+      "vayiroli",
+      "poochi",
+      "kettu pochchu",
+      "vaanthi"
+    ]
+  },
+  "roles": [
+    {
+      "name": "Brand Admin",
+      "permissions": [
+        "feedback.submit",
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "task.complete",
+        "report.view",
+        "report.export",
+        "users.manage",
+        "roles.manage",
+        "settings.edit",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Regional Manager",
+      "permissions": [
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "report.view",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Outlet Manager",
+      "permissions": [
+        "dashboard.view",
+        "task.view",
+        "task.complete",
+        "action.approve",
+        "alerts.receive"
+      ]
+    },
+    {
+      "name": "Customer",
+      "permissions": [
+        "feedback.submit"
+      ]
+    }
+  ],
+  "approver_role": "Outlet Manager",
+  "executor_role": "Outlet Manager",
+  "feedback_giver_role": "Customer",
+  "languages": [
+    "en",
+    "hi",
+    "ta"
+  ],
+  "escalation_days": 1
+}

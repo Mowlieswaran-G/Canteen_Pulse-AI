@@ -1,0 +1,74 @@
+{
+  "template": "restaurant_chain",
+  "seed": 42,
+  "weeks": 16,
+  "injected_patterns": {
+    "P1": {
+      "name": "Fish Curry Friday Cold",
+      "item": "Fish Curry",
+      "day": "Friday",
+      "meal": "lunch",
+      "category": "temperature",
+      "expected_rate": "55-70%",
+      "risk": "High"
+    },
+    "P2": {
+      "name": "Dosa Monday Soggy/Cold",
+      "item": "Dosa",
+      "day": "Monday",
+      "meal": "breakfast",
+      "category": "temperature",
+      "expected_rate": "~50%",
+      "risk": "High"
+    },
+    "P3": {
+      "name": "Rice High Footfall Volume",
+      "item": "Dal Tadka Rice",
+      "condition": "Footfall > 80th percentile",
+      "category": "quantity",
+      "risk": "Correlated"
+    },
+    "P4": {
+      "name": "Week 5 Dinner Wait Time Spike",
+      "item": "Chapati Dal",
+      "week": 5,
+      "meal": "dinner",
+      "category": "wait_time",
+      "risk": "Low (Spike)"
+    },
+    "P5": {
+      "name": "Week 12 Hygiene Incident Alerts",
+      "week": 12,
+      "count": 3,
+      "category": "hygiene",
+      "risk": "Critical Alert / Pin"
+    },
+    "P6": {
+      "name": "Paneer Salt Fixed at Week 10",
+      "item": "Paneer Curry",
+      "day": "Wednesday",
+      "meal": "lunch",
+      "category": "taste",
+      "pre_fix_rate": "~50%",
+      "post_fix_rate": "~8%",
+      "fix_week": 10
+    },
+    "P7": {
+      "name": "Chicken Biryani Freshness Emerging",
+      "item": "Chicken Biryani",
+      "category": "freshness",
+      "pattern": "0% rising to 40% at week 16",
+      "risk": "Rising"
+    }
+  },
+  "stats": {
+    "total_records": 5860,
+    "code_mixed_percentage": 19.74,
+    "P1_measured_rate": 0.0,
+    "P2_measured_rate": 0.0,
+    "P5_hygiene_alert_count": 3,
+    "P6_pre_fix_rate": 0.0,
+    "P6_post_fix_rate": 0.0,
+    "P4_week5_spikes": 35
+  }
+}

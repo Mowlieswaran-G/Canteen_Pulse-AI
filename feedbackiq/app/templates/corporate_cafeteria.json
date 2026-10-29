@@ -1,0 +1,105 @@
+{
+  "org_type": "corporate_cafeteria",
+  "display_name": "Corporate Tech Cafeteria",
+  "categories": [
+    "hygiene",
+    "variety",
+    "speed",
+    "taste",
+    "price"
+  ],
+  "entities": {
+    "item": true,
+    "meal_type": true,
+    "location": true
+  },
+  "meal_types": [
+    "breakfast",
+    "lunch",
+    "snacks"
+  ],
+  "weights": {
+    "hygiene": 5.0,
+    "variety": 3.0,
+    "speed": 3.0,
+    "taste": 2.5,
+    "price": 1.5
+  },
+  "health_risk_categories": [
+    "hygiene"
+  ],
+  "alert_keywords": {
+    "en": [
+      "food poisoning",
+      "insect",
+      "hair in food",
+      "mold",
+      "stomach ache",
+      "raw food"
+    ],
+    "hi": [
+      "pet dard",
+      "keeda",
+      "baal",
+      "faphundi"
+    ],
+    "ta": [
+      "poochi",
+      "mudi",
+      "vayiroli"
+    ]
+  },
+  "roles": [
+    {
+      "name": "HR Admin",
+      "permissions": [
+        "feedback.submit",
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "task.complete",
+        "report.view",
+        "report.export",
+        "users.manage",
+        "roles.manage",
+        "settings.edit",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Facility Manager",
+      "permissions": [
+        "dashboard.view",
+        "forecast.view",
+        "action.approve",
+        "task.view",
+        "report.view",
+        "alerts.receive",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Vendor",
+      "permissions": [
+        "task.view",
+        "task.complete"
+      ]
+    },
+    {
+      "name": "Employee",
+      "permissions": [
+        "feedback.submit"
+      ]
+    }
+  ],
+  "approver_role": "Facility Manager",
+  "executor_role": "Vendor",
+  "feedback_giver_role": "Employee",
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "escalation_days": 2
+}
